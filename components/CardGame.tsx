@@ -8,6 +8,9 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
+import CardHistory from "./CardHistory";
+import Card from "./Card";
+import { IHistoryElement, INewDeck, ICard } from "../interfaces/Interfaces";
 
 const cardOrder = [
   "2",
@@ -27,62 +30,26 @@ const cardOrder = [
 
 const suitOrder = ["Hearts", "Diamonds", "Spades", "Clubs"];
 
-interface Card {
-  code: string | false;
-  image?: string;
-  images?: string[];
-  index?: number;
-  value?:
-    | "2"
-    | "3"
-    | "4"
-    | "5"
-    | "6"
-    | "7"
-    | "8"
-    | "9"
-    | "10"
-    | "JACK"
-    | "QUEEN"
-    | "KING"
-    | "ACE";
-  suit?: "Spades" | "Diamonds" | "Clubs" | "Hearts";
-}
-
-interface HistoryElement {
-  prev: string;
-  cur: string;
-  state: "lower" | "higher";
-  point: boolean;
-}
-
-interface Deck {
-  id: string;
-  remaining: number;
-}
-
-interface NewDeck {
-  success: boolean;
-  deck_id: string;
-  cards: Card[];
-  remaining: number;
-}
-
-interface Props {}
-
-const CardGame = (props: Props) => {
+const CardGame = () => {
   const [remaining, setRemaining] = useState<number>(0);
   const [id, setId] = useState<string>("");
   const [points, setPoints] = useState<number>(0);
-  const [history, setHistory] = useState<HistoryElement[]>([]);
-
-  const [currentCard, setCurrentCard] = useState<Card>({
+  const [history, setHistory] = useState<IHistoryElement[]>([]);
+  const [currentCard, setCurrentCard] = useState<ICard>({
+    code: false,
+  });
+  const [prevCard, setPrevCard] = useState<ICard>({
     code: false,
   });
 
-  const [prevCard, setPrevCard] = useState<Card>({
-    code: false,
-  });
+  /**
+   * find place in order of cards
+   * @param {ICard} card - card to find index
+   * @returns {number} - number of index
+   */
+  const indexOfOrderSuit = (card: ICard): number => {
+    return cardOrder.findIndex((v: string) => v === card.value);
+  };
 
   /** reset deck and point
    * @return void
@@ -93,17 +60,18 @@ const CardGame = (props: Props) => {
         "https://deckofcardsapi.com/api/deck/new/draw/?count=1"
       );
 
-      const deck: NewDeck = await response.json();
+      const deck: INewDeck = await response.json();
 
       if (deck.success == false)
         throw "API deckofcardsapi not responding corectly";
 
       setPoints(0);
 
-      const prevIndex: number = cardOrder.findIndex(
-        (v: string) => v === deck.cards[0].value
-      );
-      setPrevCard({ ...deck.cards[0], ...{ index: prevIndex } });
+      setHistory([]);
+      setPrevCard({
+        ...deck.cards[0],
+        ...{ index: indexOfOrderSuit(deck.cards[0]) },
+      });
       setRemaining(deck.remaining);
       setId(deck.deck_id);
     } catch (error) {
@@ -121,21 +89,20 @@ const CardGame = (props: Props) => {
         `https://deckofcardsapi.com/api/deck/${id}/draw/?count=1`
       );
 
-      const deck: NewDeck = await response.json();
+      const deck: INewDeck = await response.json();
 
       if (deck.success == false)
         throw "API deckofcardsapi not responding corectly";
 
       const card = deck.cards[0];
 
-      const currentIndex: number = cardOrder.findIndex(
-        (v: string) => v === card.value
-      );
-      await setCurrentCard({ ...card, ...{ index: currentIndex } });
+      const currentIndex: number = indexOfOrderSuit(card);
+
+      setCurrentCard({ ...card, ...{ index: currentIndex } });
 
       let state: "higher" | "lower" = "lower";
 
-      if (prevCard.index) {
+      if (prevCard.index !== undefined) {
         if (currentIndex > prevCard.index) {
           state = "higher";
         } else if (currentIndex == prevCard.index) {
@@ -155,10 +122,8 @@ const CardGame = (props: Props) => {
         setPoints(points + 1);
       }
 
-      console.log(prevCard.code);
-      console.log(card.code);
       if (prevCard.code != false && card.code != false) {
-        const hEl: HistoryElement = {
+        const hEl: IHistoryElement = {
           prev: prevCard.code,
           cur: card.code,
           state: state,
@@ -166,11 +131,10 @@ const CardGame = (props: Props) => {
         };
         setHistory((old) => [hEl, ...old]);
       }
-      console.log(history);
 
       setTimeout(
         () => nextRound({ ...deck.cards[0], ...{ index: currentIndex } }),
-        2000
+        500
       );
 
       setRemaining(deck.remaining);
@@ -183,10 +147,10 @@ const CardGame = (props: Props) => {
   };
 
   /** start next round, clear current, set prev to current
-   * @param {Card} current - current card
+   * @param {ICard} current - current card
    * @return void
    **/
-  const nextRound = (current: Card) => {
+  const nextRound = (current: ICard) => {
     setPrevCard(current);
     setCurrentCard({ code: false });
   };
@@ -194,52 +158,6 @@ const CardGame = (props: Props) => {
   useEffect(() => {
     getDeck();
   }, []);
-
-  const symbolByLetter = (
-    letter: string
-  ): { s: string; c: "black" | "red" } => {
-    letter[1];
-
-    switch (letter[1]) {
-      case "S":
-        return { s: "♣", c: "black" };
-      case "D":
-        return { s: "♦", c: "red" };
-      case "C":
-        return { s: "♠", c: "black" };
-      default:
-        return { s: "♥", c: "red" };
-    }
-  };
-
-  const HistoryItem = ({ data }: { data: HistoryElement }) => {
-    const prevSymbol = symbolByLetter(data.prev);
-    const curSymbol = symbolByLetter(data.cur);
-    return (
-      <View
-        style={{
-          backgroundColor: "#205b23",
-          padding: 3,
-          marginBottom: 5,
-          width: 100,
-          borderRadius: 5,
-          justifyContent: "space-between",
-          flexDirection: "row",
-        }}
-      >
-        <Text style={[{ color: curSymbol.c }]}>
-          {data.cur[0] == "0" ? 10 : data.cur[0]}
-          {curSymbol.s}
-        </Text>
-        <Text>{data.state === "lower" ? "<" : ">"}</Text>
-        <Text style={[{ color: prevSymbol.c }]}>
-          {data.prev[0] == "0" ? 10 : data.prev[0]}
-          {prevSymbol.s}
-        </Text>
-        <Text>{data.point ? "🟢" : "🔴"}</Text>
-      </View>
-    );
-  };
 
   return (
     <View style={{ width: "100%" }}>
@@ -250,30 +168,8 @@ const CardGame = (props: Props) => {
           justifyContent: "space-around",
         }}
       >
-        {!currentCard.code && (
-          <View style={[styles.cardSpace]}>
-            <Image
-              style={[styles.card]}
-              resizeMode="contain"
-              source={{
-                uri:
-                  "https://opengameart.org/sites/default/files/card%20back%20black.png",
-              }}
-            />
-          </View>
-        )}
-
-        {currentCard.code && (
-          <View style={[styles.cardSpace]}>
-            <Image
-              style={[styles.card]}
-              resizeMode="contain"
-              source={{
-                uri: currentCard.image,
-              }}
-            />
-          </View>
-        )}
+        {!currentCard.code && <Card back={true} />}
+        {currentCard.code && <Card card={currentCard} />}
 
         <View style={[styles.bothCenter]}>
           <Text style={{ fontSize: 30, fontWeight: "900", color: "white" }}>
@@ -322,34 +218,15 @@ const CardGame = (props: Props) => {
 
           <View style={{}}>
             <TouchableOpacity
-              style={{
-                marginBottom: 20,
-                padding: 8,
-                borderRadius: 5,
-                backgroundColor: "#205b23",
-              }}
+              style={[styles.buttonStyle]}
               onPress={() => getDeck()}
             >
               <Text>RESTART</Text>
             </TouchableOpacity>
           </View>
-          <Text>History:</Text>
-          <FlatList
-            style={{ maxHeight: 200, overflow: "hidden" }}
-            data={history}
-            renderItem={({ item }) => <HistoryItem data={item} />}
-            keyExtractor={(item) => item.prev}
-          />
+          <CardHistory history={history}></CardHistory>
         </View>
-        {prevCard.code && (
-          <View style={[styles.cardSpace]}>
-            <Image
-              style={[styles.card]}
-              resizeMode="contain"
-              source={{ uri: prevCard.image }}
-            />
-          </View>
-        )}
+        {prevCard.code && <Card card={prevCard} />}
       </View>
     </View>
   );
@@ -363,20 +240,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  cardSpace: {
-    borderRadius: 20,
-    backgroundColor: "#205b23",
-    padding: 20,
-  },
-  card: {
-    width: 300,
-    height: 523,
-    borderRadius: 20,
-    overflow: "hidden",
-  },
-  button: {
-    backgroundColor: "#e0a230",
-  },
+
   gameover: { fontSize: 30, color: "white" },
   rowCenter: {
     alignItems: "center",
@@ -386,5 +250,17 @@ const styles = StyleSheet.create({
   bothCenter: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  buttonStyle: {
+    marginBottom: 20,
+    padding: 8,
+    borderRadius: 5,
+    backgroundColor: "#205b23",
+  },
+  blue: {
+    backgroundColor: "#3232ff",
+  },
+  gold: {
+    backgroundColor: "#e0a230",
   },
 });
