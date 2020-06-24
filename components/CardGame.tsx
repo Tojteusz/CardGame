@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Image, Button } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  Button,
+  FlatList,
+  TouchableOpacity,
+} from "react-native";
 
 const cardOrder = [
   "2",
@@ -41,6 +49,13 @@ interface Card {
   suit?: "Spades" | "Diamonds" | "Clubs" | "Hearts";
 }
 
+interface HistoryElement {
+  prev: string;
+  cur: string;
+  state: "lower" | "higher";
+  point: boolean;
+}
+
 interface Deck {
   id: string;
   remaining: number;
@@ -59,6 +74,7 @@ const CardGame = (props: Props) => {
   const [remaining, setRemaining] = useState<number>(0);
   const [id, setId] = useState<string>("");
   const [points, setPoints] = useState<number>(0);
+  const [history, setHistory] = useState<HistoryElement[]>([]);
 
   const [currentCard, setCurrentCard] = useState<Card>({
     code: false,
@@ -134,11 +150,23 @@ const CardGame = (props: Props) => {
           }
         }
       }
-      console.log(state);
 
       if (state === userState) {
         setPoints(points + 1);
       }
+
+      console.log(prevCard.code);
+      console.log(card.code);
+      if (prevCard.code != false && card.code != false) {
+        const hEl: HistoryElement = {
+          prev: prevCard.code,
+          cur: card.code,
+          state: state,
+          point: state === userState,
+        };
+        setHistory((old) => [hEl, ...old]);
+      }
+      console.log(history);
 
       setTimeout(
         () => nextRound({ ...deck.cards[0], ...{ index: currentIndex } }),
@@ -167,8 +195,54 @@ const CardGame = (props: Props) => {
     getDeck();
   }, []);
 
+  const symbolByLetter = (
+    letter: string
+  ): { s: string; c: "black" | "red" } => {
+    letter[1];
+
+    switch (letter[1]) {
+      case "S":
+        return { s: "♣", c: "black" };
+      case "D":
+        return { s: "♦", c: "red" };
+      case "C":
+        return { s: "♠", c: "black" };
+      default:
+        return { s: "♥", c: "red" };
+    }
+  };
+
+  const HistoryItem = ({ data }: { data: HistoryElement }) => {
+    const prevSymbol = symbolByLetter(data.prev);
+    const curSymbol = symbolByLetter(data.cur);
+    return (
+      <View
+        style={{
+          backgroundColor: "#205b23",
+          padding: 3,
+          marginBottom: 5,
+          width: 100,
+          borderRadius: 5,
+          justifyContent: "space-between",
+          flexDirection: "row",
+        }}
+      >
+        <Text style={[{ color: curSymbol.c }]}>
+          {data.cur[0] == "0" ? 10 : data.cur[0]}
+          {curSymbol.s}
+        </Text>
+        <Text>{data.state === "lower" ? "<" : ">"}</Text>
+        <Text style={[{ color: prevSymbol.c }]}>
+          {data.prev[0] == "0" ? 10 : data.prev[0]}
+          {prevSymbol.s}
+        </Text>
+        <Text>{data.point ? "🟢" : "🔴"}</Text>
+      </View>
+    );
+  };
+
   return (
-    <View style={{ flex: 1, width: "100%" }}>
+    <View style={{ width: "100%" }}>
       <View
         style={{
           flex: 1,
@@ -177,35 +251,47 @@ const CardGame = (props: Props) => {
         }}
       >
         {!currentCard.code && (
-          <Image
-            style={[styles.cardSpace]}
-            resizeMode="contain"
-            source={{
-              uri:
-                "https://opengameart.org/sites/default/files/card%20back%20black.png",
-            }}
-          />
+          <View style={[styles.cardSpace]}>
+            <Image
+              style={[styles.card]}
+              resizeMode="contain"
+              source={{
+                uri:
+                  "https://opengameart.org/sites/default/files/card%20back%20black.png",
+              }}
+            />
+          </View>
         )}
 
         {currentCard.code && (
-          <Image
-            style={[styles.cardSpace]}
-            resizeMode="contain"
-            source={{
-              uri: currentCard.image,
-            }}
-          />
+          <View style={[styles.cardSpace]}>
+            <Image
+              style={[styles.card]}
+              resizeMode="contain"
+              source={{
+                uri: currentCard.image,
+              }}
+            />
+          </View>
         )}
 
         <View style={[styles.bothCenter]}>
-          <View style={styles.rowCenter}>
-            <Text>Points: {points} </Text>
-            <Text>Card left: {remaining} </Text>
+          <Text style={{ fontSize: 30, fontWeight: "900", color: "white" }}>
+            LOWER or HIGHER
+          </Text>
+          <View
+            style={[
+              styles.rowCenter,
+              { width: 300, justifyContent: "space-between", marginBottom: 40 },
+            ]}
+          >
+            <Text style={{ fontSize: 20 }}>Points 🟢: {points} </Text>
+            <Text style={{ fontSize: 20 }}>Card left 🃏: {remaining} </Text>
           </View>
-          <View>
+          <View style={{ marginBottom: 30 }}>
             {remaining > 0 && (
               <React.Fragment>
-                <Text>Next card will by higher or lower?</Text>
+                <Text>Will the next card be higher or lower?</Text>
                 <View
                   style={{
                     flexDirection: "row",
@@ -235,15 +321,34 @@ const CardGame = (props: Props) => {
           </View>
 
           <View style={{}}>
-            <Button color="#c20b16" onPress={() => getDeck()} title="Restart" />
+            <TouchableOpacity
+              style={{
+                marginBottom: 20,
+                padding: 8,
+                borderRadius: 5,
+                backgroundColor: "#205b23",
+              }}
+              onPress={() => getDeck()}
+            >
+              <Text>RESTART</Text>
+            </TouchableOpacity>
           </View>
+          <Text>History:</Text>
+          <FlatList
+            style={{ maxHeight: 200, overflow: "hidden" }}
+            data={history}
+            renderItem={({ item }) => <HistoryItem data={item} />}
+            keyExtractor={(item) => item.prev}
+          />
         </View>
         {prevCard.code && (
-          <Image
-            style={[styles.cardSpace]}
-            resizeMode="contain"
-            source={{ uri: prevCard.image }}
-          />
+          <View style={[styles.cardSpace]}>
+            <Image
+              style={[styles.card]}
+              resizeMode="contain"
+              source={{ uri: prevCard.image }}
+            />
+          </View>
         )}
       </View>
     </View>
@@ -259,9 +364,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   cardSpace: {
+    borderRadius: 20,
     backgroundColor: "#205b23",
-    width: 200,
+    padding: 20,
+  },
+  card: {
+    width: 300,
     height: 523,
+    borderRadius: 20,
+    overflow: "hidden",
   },
   button: {
     backgroundColor: "#e0a230",
